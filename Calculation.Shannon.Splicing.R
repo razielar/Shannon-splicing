@@ -1,7 +1,20 @@
 #################################### Calculation of Shannon splicing from a GTF file ####################################
 
-
 ### Function 1: 
+fColnames.GTEx <- function(matrix.name){
+  
+  require(dplyr)
+  
+  new_names <- strsplit(colnames(matrix.name), split = ".", fixed = TRUE)
+  new_names <- lapply(new_names, function(x){paste0(x,collapse = "-")})
+  new_names <- new_names %>% unlist
+  colnames(matrix.name) <- new_names
+  
+  return(matrix.name)
+  
+}
+
+### Function 2: 
 fConserve.more.than.one.isoform <- function(Input.matrix){
   
   require(dplyr) 
@@ -45,7 +58,7 @@ fConserve.more.than.one.isoform <- function(Input.matrix){
   
 }
 
-### Function 2: 
+### Function 3: 
 fQuality.control.isoform.ratio <- function(Input.matrix){
   
   require(dplyr)
@@ -72,41 +85,9 @@ fQuality.control.isoform.ratio <- function(Input.matrix){
   
 }
 
-### Function 3: 
-fCalculate.isoform.ratio.per.gene <- function(Input.Matrix){
-  
-  require(dplyr)
-  
-  new_name <- strsplit(rownames(Input.Matrix), split = "-", fixed = TRUE)
-  new_name <- lapply(new_name, function(x){ y <-x[1:(length(x)-1)]; paste0(y,collapse = "-")}) 
-  new_name <- new_name %>% unlist()
-  
-  tmp.matrix <- Input.Matrix %>% mutate(Transcript=new_name)
-  
-  test <- function(x){
-    
-    glob <- x %>% select(-Transcript)
-    sumvals <- colSums(glob)
-    result <- sapply(1:length(sumvals), function(x){ round(glob[,x]/sumvals[x], digits = 4)}) %>% 
-      do.call(rbind, .) %>% t
-    
-    return(as.data.frame(result))
-    
-  }
-  
-  tmp.isoform.ratio <- tmp.matrix %>% group_by(Transcript) %>% do(test(.)) 
-  
-  tmp.isoform.ratio <- tmp.isoform.ratio[,-1] %>% as.data.frame() 
-  rownames(tmp.isoform.ratio) <- rownames(Input.Matrix)
-  
-  return(tmp.isoform.ratio) 
-  
-}
-
 ### Function 4: 
-f.Shannon.entropy <- function(Input.matrix){
-  
-  require(dplyr)
+
+f.Calculate_Shannon_splicing <- function(Input.matrix){
   
   new_name <- strsplit(rownames(Input.matrix), split = "-", fixed = TRUE)
   new_name <- lapply(new_name, function(x){ y <-x[1:(length(x)-1)]; paste0(y,collapse = "-")}) 
@@ -114,19 +95,29 @@ f.Shannon.entropy <- function(Input.matrix){
   
   tmp.matrix <- Input.matrix %>% mutate(Transcript=new_name)
   
-  entropy <- function(x){
+  Shannon_splicing <- function(x){
     
-    glob <- x%>% select(-Transcript)
-    result <- round( -colSums(glob*log(glob)), digits = 4) #Shannon entropy
-    result <- t(as.data.frame(result))
-    result <- data.frame(result)
-    #Out.put <<- rbind(result)
+    #1) Calculate the isoform ratio:
+    
+    glob <- x %>% select(-Transcript) #dataframe: with the replicates
+    sumvals <- colSums(glob) #numeric value: sum of the columns
+    result <- sapply(1:length(sumvals), function(x){ round(glob[,x]/sumvals[x], digits = 4)}) %>% 
+      do.call(rbind, .) %>% t #sapply: return a vector; dataframe
+    
+    #2) Calculate the Shannon's entropy:
+    
+    shannon_entropy <- round(-colSums(result*log(result)), digits = 4) #Shannon's formula
+    shannon_entropy <- t(as.data.frame(shannon_entropy))
+    shannon_entropy <- data.frame(shannon_entropy)
     
   }
   
-  tmp.Shannon <- tmp.matrix %>% group_by(Transcript) %>% do(entropy(.))
-  tmp.Shannon <- tmp.Shannon %>% as.data.frame()
-  tmp.Shannon <- fColnames.GTEx(tmp.Shannon)
+  tmp.isoform.ratio <- tmp.matrix %>% group_by(Transcript) %>% do(Shannon_splicing(.)) 
+  tmp.isoform.ratio <- tmp.isoform.ratio %>% as.data.frame()
+  tmp.isoform.ratio <- fColnames.GTEx(tmp.isoform.ratio)
+  
+  return(tmp.isoform.ratio)
+  
   
 }
 
